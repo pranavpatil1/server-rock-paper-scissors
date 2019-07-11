@@ -63,33 +63,49 @@ void main (int argc, char *argv[]) {
 // start a loop of accepting client connections and then receiving messages
 //while (1) {
 
+	// waiting for all of the clients to join
 	while (currClients < NUM_CL) {
 		clientLen = sizeof (clientAddr[currClients] ) ;
+		// accept clients (creates a new socket)
 		if ( (clientSock[currClients]=accept(sockid,(struct sockaddr *)&clientAddr[currClients], &clientLen)) < 0) {
 			error("ERROR on accept");
 		}
-	currClients ++;
+		currClients ++;
 		printf( "We have accepted client number %d\n" , currClients) ;
 	}
+	
+	// sends a message to all users
 	int i;
 	for (i = 0; i < NUM_CL; ++i) {
 		char *a = "\nThe game has begun. Please wait.\nWhen your turn comes, you can play: 1 [rock], 2 [paper], or 3 [scissors].\n\n";
 		sendMessage(clientSock[i], a);
 	}
+	
+	// goes user by user
 	int moves[NUM_CL];
 	for (i = 0; i < NUM_CL; ++i) {
+		// user's turn
 		sendMessage(clientSock[i], "\nIt is your turn!\n> ");
 		if ((msgSize = recv(clientSock[i], echoBuf, BUFSIZE, 0)) < 0) {
 			error("ERROR on recv 2");
 		}
+		// user completed move
 		sendMessage(clientSock[i], "Thank you for your play\n");
+		// grab # (1-3 mapped to 0,1,2)
 		moves[i] = echoBuf[0] - '1';
 		moves[i] %= 3;
+		
+		// report to other players that a move has been done
 		int j;
 		for (j = 0; j < NUM_CL; ++j) {
 			if (i != j) sendMessage(clientSock[j], "A player has played.\n");
 		}
 	}
+	
+	// store states, does some cool math to figure out who lost and who won
+	// if end result is 0, same move = draw
+	// if end result is 1, they lost
+	// if end result is 2, they won
 	int numStates[2];
 	numStates[0] = moves[1] - moves[0];
 	numStates[1] = -numStates[0];
@@ -100,10 +116,13 @@ void main (int argc, char *argv[]) {
 	}
 	char *textStates[3] = {"drew", "lost", "won" } ;
 
+	// end game, send out messages
 	printf ("Closing connection with clients\n");
 	for (i = 0; i < NUM_CL; ++i) {
 		char endGame[36] ;
 		char *end = textStates[numStates[i]];
+		// format statement into string to send out
+		// stores data in endGame var
 		snprintf(endGame, 36, "You %s\n\nGoodbye!\n" ,end);
 		sendMessage(clientSock[i], endGame) ;
 		close(clientSock[i]);
